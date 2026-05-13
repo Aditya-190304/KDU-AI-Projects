@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.pytest-tmp/
+output/
+sample_docs/
+.model_cache/
+.env
+.env.*
+.vscode/
+data/rxnorm/*.zip
+*.pyc
+*.pyo
+*.pyd
