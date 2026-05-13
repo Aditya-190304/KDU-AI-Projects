@@ -1,0 +1,9 @@
+models:
+  page_classifier: pymupdf
+  copyable_text: pdfplumber
+  tables: camelot
+  crop_classifier: microsoft/dit-base-finetuned-rvlcdip
+  scanned_ocr: paddleocr
+  form_understanding: nielsr/layoutlmv3-finetuned-funsd
+  handwriting: ollama/qwen2.5vl:3b
+  medical_ner: d4data/biomedical-ner-all

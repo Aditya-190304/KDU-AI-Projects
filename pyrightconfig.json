@@ -1,0 +1,13 @@
+{
+  "include": [
+    "src",
+    "scripts",
+    "tests",
+    "medical_extraction"
+  ],
+  "extraPaths": [
+    "./src"
+  ],
+  "venvPath": ".",
+  "typeCheckingMode": "basic"
+}
