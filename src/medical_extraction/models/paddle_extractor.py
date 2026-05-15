@@ -17,11 +17,7 @@ class PaddleExtractor:
     model_name = "paddleocr_v5"
 
     def __init__(self, device: str = "cpu") -> None:
-        temp_root = os.environ.get("TEMP") or os.environ.get("TMP")
-        if temp_root:
-            default_cache_home = Path(temp_root) / "medical_extraction_paddlex_cache"
-        else:
-            default_cache_home = Path(os.getcwd()) / ".model_cache" / "paddlex"
+        default_cache_home = Path(os.getcwd()) / ".model_cache" / "paddlex"
         cache_home = os.environ.get("MEDICAL_PADDLE_CACHE_HOME", str(default_cache_home))
         Path(cache_home).mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("PADDLE_PDX_CACHE_HOME", cache_home)
@@ -157,12 +153,6 @@ class PaddleExtractor:
             return True
         if self._ocr_error:
             return False
-        if self._offline_only and not self._has_local_ocr_models():
-            self._ocr_error = (
-                "Required local Paddle OCR models not found/readable in cache. "
-                "Set MEDICAL_PADDLE_OFFLINE_ONLY=false to allow auto-download."
-            )
-            return False
         try:
             from paddleocr import PaddleOCR
 
@@ -175,7 +165,14 @@ class PaddleExtractor:
             )
             return True
         except Exception as exc:
-            self._ocr_error = str(exc)
+            message = str(exc)
+            if self._offline_only and "model hosting platforms" in message.lower():
+                self._ocr_error = (
+                    "Required local Paddle OCR models not found/readable in cache. "
+                    "Set MEDICAL_PADDLE_OFFLINE_ONLY=false to allow auto-download."
+                )
+            else:
+                self._ocr_error = message
             return False
 
     def _has_local_ocr_models(self) -> bool:

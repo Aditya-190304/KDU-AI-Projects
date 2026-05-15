@@ -1,0 +1,71 @@
+{
+  "documents": {
+    "10": {
+      "description": "Handwritten Apollo Hospital letter for Mr. CH. Samuel by Dr. Naveen Polavarapu",
+      "ground_truth_text": "Dr. Naveen Polavarapu MRCP (UK), FRCP (Gastro), CCT (Gastro), Liver Transplant Fellowship Consultant Gastroenterologist and Transplant Hepatologist Regd.No. 46206 P 040 - 2360 7777, Extn 4005/1142 For appointments call between 10 am - 6 pm : 7382778899 Email : docpolav@gmail.com 24/8/21 TO WHOM SO EVER IT MAY CONCERN This is to inform that Mr. CH. SAMUEL 62yr Male is currently admitted under my care with IP.No: 367588. He is currently undergoing treatment in ICU for severe sepsis with MODS (likely liver abscess with aspiration pneumonia). He further needs hospital stay for about 8-10 days for complete recovery. This is to inform and kindly do the needful. Thanking You. Dr. NAVEEN POLAVARAPU MRCP (Lon), MRCP (Edin), MRCP (Gastro), CCST (Gastro) Liver Transplant Fellowship Consultant Transplant Hepatologist Regd. No:46206 Apollo Hospitals, Jubilee Hills, Hyd-96",
+      "key_phrases": [
+        "Dr. Naveen Polavarapu",
+        "CH. SAMUEL",
+        "62yr Male",
+        "IP.No: 367588",
+        "ICU",
+        "severe sepsis",
+        "MODS",
+        "liver abscess",
+        "aspiration pneumonia",
+        "8-10 days",
+        "hospital stay",
+        "complete recovery",
+        "Apollo Hospitals",
+        "Jubilee Hills",
+        "24/8/21",
+        "Gastroenterologist",
+        "Transplant Hepatologist",
+        "46206",
+        "7382778899"
+      ],
+      "answer_keys": {
+        "Who is Mr. CH. Samuel's Doctor?": "Dr. Naveen Polavarapu",
+        "What is CH Samuel's IP number?": "367588",
+        "What is CH Samuel's diagnosis or condition?": "severe sepsis with MODS, likely liver abscess with aspiration pneumonia",
+        "How many days of hospital stay does CH Samuel need?": "8-10 days"
+      }
+    },
+    "john_doe_synthetic_medical_report_table_image_different": {
+      "description": "Synthetic medical report for John Doe with embedded medication image",
+      "ground_truth_text": "SYNTHETIC MEDICAL REPORT - RAG TEST SAMPLE Not a real medical record. Fictional data generated for document-processing and retrieval testing only. Patient Name John Doe Report Date 14-May-2026 Patient ID SYN-PT-00042 Visit Type Outpatient follow-up DOB 01-Jan-1980 Clinician Dr. Synthetic Example Clinical Summary John Doe presented with three days of productive cough, mild fever, and fatigue. Oxygen saturation was stable on room air. The clinician noted scattered right lower lung crackles without respiratory distress. Structured Table - Basic Lab Panel Test Result Reference Range Flag WBC 12.4 x10^9/L 4.0 - 11.0 High Hemoglobin 13.8 g/dL 13.0 - 17.0 Normal Platelets 245 x10^9/L 150 - 400 Normal C-reactive protein 18 mg/L < 5 High Creatinine 0.9 mg/dL 0.7 - 1.3 Normal Embedded Image - Raster Text Slip Assessment and Plan Assessment: suspected uncomplicated bacterial lower respiratory infection with elevated inflammatory markers. Plan: oral antibiotic course as shown in the raster image, hydration, acetaminophen as needed for fever, and follow-up in 72 hours or sooner for worsening symptoms. RX ID: SYN-RX-1047 Patient: John Doe Medication: Amoxicillin 500 mg capsule Directions: Take 1 capsule by mouth every 8 hours for 7 days. Start Date: 14-May-2026 Warnings: Take with food. Complete full course unless advised. Follow-up call if rash, wheezing, or severe diarrhea occurs. Quantity: 21 capsules",
+      "key_phrases": [
+        "John Doe",
+        "SYN-PT-00042",
+        "01-Jan-1980",
+        "Dr. Synthetic Example",
+        "Outpatient follow-up",
+        "productive cough",
+        "mild fever",
+        "WBC",
+        "12.4",
+        "Hemoglobin",
+        "13.8",
+        "Platelets",
+        "245",
+        "C-reactive protein",
+        "18 mg/L",
+        "Creatinine",
+        "0.9",
+        "Amoxicillin",
+        "500 mg",
+        "SYN-RX-1047",
+        "21 capsules",
+        "every 8 hours",
+        "7 days",
+        "bacterial lower respiratory infection"
+      ],
+      "answer_keys": {
+        "What medication is prescribed to John Doe?": "Amoxicillin 500 mg capsule",
+        "What is John Doe's WBC count?": "12.4 x10^9/L",
+        "What is the diagnosis for John Doe?": "suspected uncomplicated bacterial lower respiratory infection with elevated inflammatory markers",
+        "Who is John Doe's clinician or doctor?": "Dr. Synthetic Example"
+      }
+    }
+  }
+}

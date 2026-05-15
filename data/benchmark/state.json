@@ -1,0 +1,18 @@
+{
+  "ocr_scores": {
+    "10": {
+      "accuracy": 36.8,
+      "found": 7,
+      "total": 19
+    },
+    "john_doe_synthetic_medical_report_table_image_different": {
+      "accuracy": 100.0,
+      "found": 24,
+      "total": 24
+    }
+  },
+  "processing_times": {
+    "10": 1.5,
+    "john_doe_synthetic_medical_report_table_image_different": 2.0
+  }
+}

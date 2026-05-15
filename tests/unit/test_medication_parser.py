@@ -46,3 +46,13 @@ def test_anchor_and_continuation_detection():
     assert has_medication_anchor("Tab. Augmentin 625 mg") is True
     assert looks_like_continuation_line("x I week") is True
     assert looks_like_continuation_line("paint") is True
+
+
+def test_parser_skips_narrative_certificate_text():
+    text = "He is currently undergoing treatment in ICU for severe sepsis with MOBS"
+    assert parse_medications(text, page_number=1, block_id="p1_b4") == []
+
+
+def test_parser_skips_signature_and_hospital_lines():
+    text = "NAVEEN POLAVARAPU MRCP (Lond), MRCP (Edin), Apollo Hospitals Jubilee Hills"
+    assert parse_medications(text, page_number=1, block_id="p1_b5") == []

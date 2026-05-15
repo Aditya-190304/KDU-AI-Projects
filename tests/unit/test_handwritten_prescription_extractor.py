@@ -117,3 +117,39 @@ def test_column_region_bbox_expands_block():
     assert bbox is not None
     assert bbox[0] <= 100 and bbox[1] <= 120
     assert bbox[2] >= 210 and bbox[3] >= 190
+
+
+class _NarrativeHandwritingOcr:
+    def extract_text(self, _image):
+        return "This is to inform that the patient is under my care and needs hospital stay", 0.84
+
+
+class _NarrativeRegistry:
+    def __init__(self):
+        self.scanned_ocr = _FakeScannedOcr()
+        self.handwriting_ocr = _NarrativeHandwritingOcr()
+
+
+def test_region_ocr_keeps_narrative_columns_as_paragraphs():
+    extractor = HandwrittenPrescriptionExtractor(_NarrativeRegistry())
+    blocks = extractor._build_prescription_blocks(
+        _FakeImage(),
+        [
+            {
+                "text": "This is to inform that the patient is under my care",
+                "bbox": [10, 120, 360, 150],
+                "confidence": 0.84,
+                "words": [],
+            },
+            {
+                "text": "and needs hospital stay for complete recovery",
+                "bbox": [10, 156, 360, 188],
+                "confidence": 0.84,
+                "words": [],
+            }
+        ],
+        page_number=1,
+    )
+    assert blocks
+    assert all(block["type"] == "paragraph" for block in blocks)
+    assert "under my care\nand needs hospital stay" in blocks[0]["text"].lower()

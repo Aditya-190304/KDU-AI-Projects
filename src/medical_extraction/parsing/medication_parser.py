@@ -61,6 +61,37 @@ FOOTER_NOISE_MARKERS = {
     "info@",
 }
 
+NARRATIVE_MARKERS = {
+    "to whom",
+    "concern",
+    "this is to",
+    "under my care",
+    "admitted",
+    "undergoing treatment",
+    "hospital stay",
+    "complete recovery",
+    "kindly do the needful",
+    "thanking you",
+    "icu",
+    "sepsis",
+    "pneumonia",
+}
+
+SIGNATURE_MARKERS = {
+    "appointments",
+    "apollo hospitals",
+    "consultant",
+    "gastroenterologist",
+    "hepatologist",
+    "jubilee hills",
+    "regd.no",
+    "regd no",
+    "mrcp",
+    "frcp",
+    "ccst",
+    "extn",
+}
+
 def _normalize_digit_token(value: str) -> str:
     lowered = value.lower()
     if lowered in {"i", "l"}:
@@ -107,9 +138,41 @@ def is_footer_noise_line(text: str) -> bool:
     return any(marker in lowered for marker in FOOTER_NOISE_MARKERS)
 
 
-def looks_like_prescription_line(text: str) -> bool:
+def has_explicit_medication_signal(text: str) -> bool:
     cleaned = clean_prescription_line(text)
     if not cleaned or is_footer_noise_line(cleaned):
+        return False
+    lowered = cleaned.lower()
+    if any(name in lowered for name in KNOWN_MEDICATIONS):
+        return True
+    if FORM_PATTERN.search(cleaned) or DOSE_PATTERN.search(cleaned):
+        return True
+    if FREQUENCY_PATTERN.search(cleaned) or ROUTE_PATTERN.search(cleaned):
+        return True
+    if lowered.startswith(("adv", "rx")):
+        return True
+    return bool(INSTRUCTION_PATTERN.search(cleaned) and len(cleaned.split()) <= 8)
+
+
+def is_likely_non_medication_text(text: str) -> bool:
+    cleaned = clean_prescription_line(text)
+    if not cleaned:
+        return True
+    lowered = cleaned.lower()
+    if any(marker in lowered for marker in SIGNATURE_MARKERS):
+        return True
+    if any(lowered.startswith(prefix) for prefix in ("this is to", "he is", "he was", "he further", "thanking you")):
+        return True
+    if any(marker in lowered for marker in NARRATIVE_MARKERS) and not has_explicit_medication_signal(cleaned):
+        return True
+    if len(cleaned.split()) >= 8 and not has_explicit_medication_signal(cleaned):
+        return True
+    return False
+
+
+def looks_like_prescription_line(text: str) -> bool:
+    cleaned = clean_prescription_line(text)
+    if not cleaned or is_footer_noise_line(cleaned) or is_likely_non_medication_text(cleaned):
         return False
     lowered = cleaned.lower()
     score = 0
@@ -130,7 +193,7 @@ def looks_like_prescription_line(text: str) -> bool:
 
 def has_medication_anchor(text: str) -> bool:
     cleaned = clean_prescription_line(text)
-    if not cleaned or is_footer_noise_line(cleaned):
+    if not cleaned or is_footer_noise_line(cleaned) or is_likely_non_medication_text(cleaned):
         return False
     lowered = cleaned.lower()
     if any(name in lowered for name in KNOWN_MEDICATIONS):
@@ -142,7 +205,7 @@ def has_medication_anchor(text: str) -> bool:
 
 def looks_like_continuation_line(text: str) -> bool:
     cleaned = clean_prescription_line(text)
-    if not cleaned or is_footer_noise_line(cleaned):
+    if not cleaned or is_footer_noise_line(cleaned) or is_likely_non_medication_text(cleaned):
         return False
     if has_medication_anchor(cleaned):
         return False
@@ -156,6 +219,9 @@ def _extract_medication_name(text: str) -> str | None:
     for medication_name in sorted(KNOWN_MEDICATIONS, key=len, reverse=True):
         if medication_name in lowered:
             return medication_name.title()
+
+    if not has_explicit_medication_signal(text):
+        return None
 
     working = re.sub(r"^\s*adv[:\-]?\s*", "", text, flags=re.IGNORECASE)
     working = re.sub(r"^\s*(before|after|with)\s+meals?\b", "", working, flags=re.IGNORECASE)
@@ -181,7 +247,7 @@ def _extract_medication_name(text: str) -> str | None:
 
 def parse_prescription_line(line: str, page_number: int, block_id: str, confidence: float = 0.75) -> dict | None:
     cleaned = clean_prescription_line(line)
-    if not cleaned or is_footer_noise_line(cleaned):
+    if not cleaned or is_footer_noise_line(cleaned) or is_likely_non_medication_text(cleaned):
         return None
 
     dose_match = DOSE_PATTERN.search(cleaned)
@@ -191,10 +257,11 @@ def parse_prescription_line(line: str, page_number: int, block_id: str, confiden
     form_match = FORM_PATTERN.search(cleaned)
     instruction_matches = INSTRUCTION_PATTERN.findall(cleaned)
     medication_name = _extract_medication_name(cleaned)
+    explicit_signal = has_explicit_medication_signal(cleaned)
 
-    if not medication_name and not looks_like_prescription_line(cleaned):
+    if not medication_name and not explicit_signal and not looks_like_prescription_line(cleaned):
         return None
-    if not medication_name and not any((dose_match, frequency_match, duration_match, instruction_matches)):
+    if not medication_name and not any((dose_match, frequency_match, route_match, form_match, instruction_matches)):
         return None
 
     parsed_confidence = round(confidence, 2)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any, Callable
 
 from PIL import Image
 
@@ -27,6 +28,10 @@ from medical_extraction.parsing.lab_parser import parse_labs
 from medical_extraction.parsing.medication_parser import parse_medications
 from medical_extraction.quality.quality_checker import QualityChecker
 from medical_extraction.storage.local_storage import LocalInputAdapter, LocalOutputAdapter
+from medical_extraction.storage.processed_registry import ProcessedFileRegistry
+from medical_extraction.storage.rag_ingestion import RagIngestionService
+from medical_extraction.utils.chunking import LocalMedicalChunker, derive_chunk_path
+from medical_extraction.utils.json_utils import read_json, write_json
 from medical_extraction.utils.logging_utils import get_logger
 from medical_extraction.utils.pdf_utils import open_pdf_document
 from medical_extraction.utils.rag_text import build_rag_text, derive_rag_text_path
@@ -42,6 +47,9 @@ class ExtractionPipeline:
         self.input_adapter = LocalInputAdapter()
         self.output_adapter = LocalOutputAdapter()
         self.model_registry = ModelRegistry(device=device)
+        self.chunker = LocalMedicalChunker(config=self.config.get("chunking", {}), device=device)
+        self.ingestion_service = RagIngestionService(config=self.config, device=device)
+        self.processed_registry = ProcessedFileRegistry()
         self.page_classifier = PageClassifier(thresholds=thresholds)
         self.copyable_extractor = CopyablePdfExtractor()
         self.mixed_extractor = MixedPdfExtractor(self.model_registry)
@@ -57,10 +65,21 @@ class ExtractionPipeline:
         save_debug_images: bool = False,
         enable_medical_ner: bool = False,
         text_only: bool = False,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict:
         validated_input = self.input_adapter.validate(input_path)
         document_id = self.input_adapter.document_id(input_path)
+        file_hash = self.processed_registry.compute_file_hash(validated_input)
         self.model_registry.reset_ocr_usage()
+        self._notify_progress(progress_callback, 2, "preparing", "Validated input and initialized extraction.")
+        cached_payload = self._load_cached_payload(
+            file_hash=file_hash,
+            requested_output_path=output_path,
+            text_only=text_only,
+            progress_callback=progress_callback,
+        )
+        if cached_payload is not None:
+            return cached_payload
 
         pages: list[dict] = []
         warnings: list[str] = []
@@ -71,7 +90,15 @@ class ExtractionPipeline:
         started = time.perf_counter()
         if validated_input.suffix.lower() == ".pdf":
             document = open_pdf_document(str(validated_input))
-            for page in document:
+            total_pages = len(document)
+            self._notify_progress(
+                progress_callback,
+                6,
+                "preparing",
+                f"Opened PDF with {total_pages} page{'s' if total_pages != 1 else ''}.",
+                total_pages=total_pages,
+            )
+            for index, page in enumerate(document, start=1):
                 extracted_page, page_entities, page_medications, page_labs, page_warnings = self._process_page(
                     page=page,
                     input_path=str(validated_input),
@@ -84,7 +111,17 @@ class ExtractionPipeline:
                 medications.extend(page_medications)
                 labs.extend(page_labs)
                 warnings.extend(page_warnings)
+                page_progress = 10 + int((index / max(total_pages, 1)) * 48)
+                self._notify_progress(
+                    progress_callback,
+                    page_progress,
+                    "extracting",
+                    f"Processed page {index} of {total_pages}.",
+                    processed_pages=index,
+                    total_pages=total_pages,
+                )
         else:
+            self._notify_progress(progress_callback, 10, "extracting", "Processing uploaded image.")
             extracted_page, page_entities, page_medications, page_labs, page_warnings = self._process_image_page(
                 image_path=str(validated_input),
                 debug_dir=debug_dir,
@@ -96,8 +133,10 @@ class ExtractionPipeline:
             medications.extend(page_medications)
             labs.extend(page_labs)
             warnings.extend(page_warnings)
+            self._notify_progress(progress_callback, 58, "extracting", "Finished OCR and parsing for the uploaded image.")
 
         elapsed_seconds = round(time.perf_counter() - started, 2)
+        self._notify_progress(progress_callback, 62, "finalizing", "Compiling extracted document payload.")
         ocr_usage = self.model_registry.get_ocr_usage_summary()
         summary = self._build_summary(pages, elapsed_seconds)
         summary["ocr_requests"] = ocr_usage["totals"]["requests"]
@@ -123,17 +162,198 @@ class ExtractionPipeline:
                 "ocr_usage": ocr_usage,
             },
         ).to_dict()
+        payload["file_hash"] = file_hash
         rag_text_output_path = output_path if text_only else derive_rag_text_path(output_path)
         payload.setdefault("debug_artifacts", {})["rag_text_file"] = rag_text_output_path
+        rag_text_payload = build_rag_text(payload)
+        self._notify_progress(progress_callback, 68, "writing_text", "Writing retrieval text output.")
+        self._write_rag_text_file(rag_text_output_path, rag_text_payload)
+        self._notify_progress(progress_callback, 74, "chunking", "Building medical chunks.")
+        raw_chunks = self._write_chunk_file(payload, rag_text_output_path)
+        self._notify_progress(
+            progress_callback,
+            80,
+            "chunking",
+            f"Built {len(raw_chunks)} chunk{'s' if len(raw_chunks) != 1 else ''}.",
+            total_chunks=len(raw_chunks),
+        )
+        self._run_ingestion(payload, rag_text_payload, raw_chunks, progress_callback=progress_callback)
+        cache_payload_path = self._resolve_cache_payload_path(output_path, text_only=text_only)
         if not text_only:
+            self._notify_progress(progress_callback, 98, "writing_result", "Writing extraction result file.")
             self.output_adapter.write_result(output_path, payload)
-        self._write_rag_text_file(rag_text_output_path, build_rag_text(payload))
+        if Path(cache_payload_path) != Path(output_path) or text_only:
+            write_json(cache_payload_path, payload)
+        self._store_processed_record(
+            file_hash=file_hash,
+            input_file=str(validated_input),
+            output_path=cache_payload_path,
+            rag_text_output_path=rag_text_output_path,
+            chunk_output_path=str((payload.get("debug_artifacts") or {}).get("chunk_file", "")),
+            payload=payload,
+        )
+        self._notify_progress(progress_callback, 100, "complete", "Document is ready for querying.")
         return payload
 
     def _write_rag_text_file(self, rag_text_output_path: str, text_payload: str) -> None:
         path = Path(rag_text_output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text_payload, encoding="utf-8")
+
+    def _write_chunk_file(self, payload: dict, rag_text_output_path: str) -> list[dict]:
+        chunking_config = self.config.get("chunking", {})
+        if not bool(chunking_config.get("enabled", True)):
+            return []
+        result = self.chunker.build_chunks(payload, source_text_path=rag_text_output_path)
+        if result.warnings:
+            payload.setdefault("warnings", []).extend(result.warnings)
+            payload.setdefault("debug_artifacts", {})["chunking_warnings"] = result.warnings
+        payload.setdefault("summary", {})["total_chunks"] = len(result.chunks)
+        chunk_output_path = derive_chunk_path(rag_text_output_path)
+        payload.setdefault("debug_artifacts", {})["chunk_file"] = chunk_output_path
+        if not bool(chunking_config.get("write_chunk_file", True)):
+            return result.chunks
+        write_json(chunk_output_path, result.chunks)
+        return result.chunks
+
+    def _run_ingestion(
+        self,
+        payload: dict,
+        rag_text_payload: str,
+        raw_chunks: list[dict],
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        refresh_indexes_only: bool = False,
+    ) -> None:
+        if not raw_chunks:
+            self._notify_progress(progress_callback, 92, "indexing", "No chunks generated, skipping embedding and indexing.")
+            return
+        self._notify_progress(progress_callback, 84, "indexing", "Preparing chunks for storage and embedding.")
+        result = self.ingestion_service.ingest(
+            payload=payload,
+            rag_text=rag_text_payload,
+            raw_chunks=raw_chunks,
+            progress_callback=progress_callback,
+            refresh_indexes_only=refresh_indexes_only,
+        )
+        if result.get("warnings"):
+            payload.setdefault("warnings", []).extend(result["warnings"])
+            payload.setdefault("debug_artifacts", {})["ingestion_warnings"] = result["warnings"]
+        payload.setdefault("summary", {})["indexed_chunks"] = int(result.get("indexed", 0))
+        payload.setdefault("debug_artifacts", {})["ingestion_artifacts"] = result.get("artifacts", {})
+        self._notify_progress(
+            progress_callback,
+            96,
+            "indexing",
+            f"Indexed {int(result.get('indexed', 0))} chunk{'s' if int(result.get('indexed', 0)) != 1 else ''}.",
+            indexed_chunks=int(result.get("indexed", 0)),
+        )
+
+    def _notify_progress(
+        self,
+        callback: Callable[[dict[str, Any]], None] | None,
+        percent: int,
+        stage: str,
+        detail: str,
+        **extra: Any,
+    ) -> None:
+        if callback is None:
+            return
+        payload: dict[str, Any] = {
+            "percent": max(0, min(int(percent), 100)),
+            "stage": str(stage),
+            "detail": str(detail),
+        }
+        payload.update(extra)
+        callback(payload)
+
+    def _load_cached_payload(
+        self,
+        *,
+        file_hash: str,
+        requested_output_path: str,
+        text_only: bool,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict | None:
+        record = self.processed_registry.get(file_hash)
+        if record is None:
+            return None
+        output_path = Path(record.output_file)
+        rag_text_path = Path(record.rag_text_file)
+        chunk_path = Path(record.chunk_file)
+        if not output_path.exists() or not rag_text_path.exists() or not chunk_path.exists():
+            return None
+        cached_payload = read_json(output_path)
+        if not isinstance(cached_payload, dict):
+            return None
+        raw_chunks = read_json(chunk_path)
+        if not isinstance(raw_chunks, list):
+            return None
+        rag_text_payload = rag_text_path.read_text(encoding="utf-8")
+        cached_payload["file_hash"] = file_hash
+        cached_payload.setdefault("debug_artifacts", {})["cache_hit"] = True
+        cached_payload.setdefault("debug_artifacts", {})["rag_text_file"] = str(rag_text_path)
+        cached_payload.setdefault("debug_artifacts", {})["chunk_file"] = str(chunk_path)
+        cached_payload.setdefault("summary", {}).setdefault("indexed_chunks", int(record.summary.get("indexed_chunks", 0) or 0))
+        self._notify_progress(
+            progress_callback,
+            68,
+            "cached",
+            "Loaded cached extraction. Refreshing retrieval indexes from saved chunks.",
+        )
+        self._run_ingestion(
+            cached_payload,
+            rag_text_payload,
+            raw_chunks,
+            progress_callback=progress_callback,
+            refresh_indexes_only=True,
+        )
+        write_json(output_path, cached_payload)
+        if not text_only and Path(requested_output_path) != output_path:
+            self.output_adapter.write_result(requested_output_path, cached_payload)
+        self.processed_registry.upsert(
+            file_hash=file_hash,
+            document_id=str(cached_payload.get("document_id", "")).strip(),
+            input_file=record.input_file,
+            output_file=str(output_path),
+            rag_text_file=str(rag_text_path),
+            chunk_file=str(chunk_path),
+            summary=dict(cached_payload.get("summary") or {}),
+            warnings=list(cached_payload.get("warnings") or []),
+        )
+        self._notify_progress(
+            progress_callback,
+            100,
+            "cached",
+            "This exact file was already processed earlier. Loaded cached extraction and refreshed retrieval indexes.",
+        )
+        return cached_payload
+
+    def _store_processed_record(
+        self,
+        *,
+        file_hash: str,
+        input_file: str,
+        output_path: str,
+        rag_text_output_path: str,
+        chunk_output_path: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self.processed_registry.upsert(
+            file_hash=file_hash,
+            document_id=str(payload.get("document_id", "")).strip(),
+            input_file=input_file,
+            output_file=output_path,
+            rag_text_file=rag_text_output_path,
+            chunk_file=chunk_output_path,
+            summary=dict(payload.get("summary") or {}),
+            warnings=list(payload.get("warnings") or []),
+        )
+
+    def _resolve_cache_payload_path(self, output_path: str, text_only: bool) -> str:
+        target = Path(output_path)
+        if not text_only and target.suffix.lower() == ".json":
+            return str(target)
+        return str(target.with_name(f"{target.stem}_payload.json"))
 
     def _process_image_page(
         self,
