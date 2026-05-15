@@ -1,0 +1,4 @@
+pipeline:
+  save_debug_images: false
+  enable_medical_ner: true
+  device: cpu
