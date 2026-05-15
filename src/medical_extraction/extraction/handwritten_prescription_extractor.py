@@ -443,62 +443,85 @@ class HandwrittenPrescriptionExtractor:
             fragments = self._split_region_text(region_text)
             if not fragments:
                 fragments = [region_text]
+            allow_structured_items = self._column_supports_prescription_items(column_lines, fragments)
 
-            for fragment in fragments:
-                medications = parse_medications(
-                    fragment,
-                    page_number=page_number,
-                    block_id=f"p{page_number}_rx{block_index}",
-                    confidence=region_confidence,
-                )
-                if medications:
-                    for medication in medications:
-                        fields = {
-                            "medication": {
-                                "value": medication["medication"],
-                                "confidence": medication["confidence"],
-                            },
-                            "dose": {
-                                "value": medication["dose"],
-                                "confidence": medication["confidence"],
-                            },
-                            "route": {
-                                "value": medication["route"],
-                                "confidence": medication["confidence"],
-                            },
-                            "frequency": {
-                                "value": medication["frequency"],
-                                "confidence": medication["confidence"],
-                            },
-                            "duration": {
-                                "value": medication["duration"],
-                                "confidence": medication["confidence"],
-                            },
-                            "form": {
-                                "value": medication["form"],
-                                "confidence": medication["confidence"],
-                            },
-                            "instructions": {
-                                "value": medication["instructions"],
-                                "confidence": medication["confidence"],
-                            },
-                        }
-                        blocks.append(
-                            ExtractedBlock(
-                                block_id=medication["block_id"],
-                                type="prescription_item",
-                                text=medication["text"],
-                                source=source,
-                                confidence=medication["confidence"],
-                                page_number=page_number,
-                                bbox=[float(value) for value in region_bbox],
-                                needs_review=medication["needs_review"],
-                                fields=fields,
-                                metadata={"column_index": column_index},
-                            ).to_dict()
-                        )
+            if not allow_structured_items:
+                narrative_text = self._build_narrative_column_text(column_lines)
+                if not narrative_text:
+                    narrative_text = "\n".join(fragment for fragment in fragments if fragment).strip()
+                if narrative_text:
+                    blocks.append(
+                        ExtractedBlock(
+                            block_id=f"p{page_number}_body_region_{block_index}",
+                            type="paragraph",
+                            text=narrative_text,
+                            source="paddle_layout_paragraph",
+                            confidence=round(max(0.55, float(region_confidence)), 2),
+                            page_number=page_number,
+                            bbox=[float(value) for value in region_bbox],
+                            needs_review=float(region_confidence) < 0.72,
+                            metadata={"column_index": column_index, "layout_strategy": "paddle_lines"},
+                        ).to_dict()
+                    )
                     block_index += 1
                     continue
+
+            for fragment in fragments:
+                if allow_structured_items:
+                    medications = parse_medications(
+                        fragment,
+                        page_number=page_number,
+                        block_id=f"p{page_number}_rx{block_index}",
+                        confidence=region_confidence,
+                    )
+                    if medications:
+                        for medication in medications:
+                            fields = {
+                                "medication": {
+                                    "value": medication["medication"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "dose": {
+                                    "value": medication["dose"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "route": {
+                                    "value": medication["route"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "frequency": {
+                                    "value": medication["frequency"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "duration": {
+                                    "value": medication["duration"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "form": {
+                                    "value": medication["form"],
+                                    "confidence": medication["confidence"],
+                                },
+                                "instructions": {
+                                    "value": medication["instructions"],
+                                    "confidence": medication["confidence"],
+                                },
+                            }
+                            blocks.append(
+                                ExtractedBlock(
+                                    block_id=medication["block_id"],
+                                    type="prescription_item",
+                                    text=medication["text"],
+                                    source=source,
+                                    confidence=medication["confidence"],
+                                    page_number=page_number,
+                                    bbox=[float(value) for value in region_bbox],
+                                    needs_review=medication["needs_review"],
+                                    fields=fields,
+                                    metadata={"column_index": column_index},
+                                ).to_dict()
+                            )
+                        block_index += 1
+                        continue
 
                 blocks.append(
                     ExtractedBlock(
@@ -516,6 +539,23 @@ class HandwrittenPrescriptionExtractor:
                 block_index += 1
 
         return blocks
+
+    def _column_supports_prescription_items(self, column_lines: list[dict], fragments: list[str]) -> bool:
+        candidates = [clean_prescription_line(line.get("text", "")) for line in column_lines]
+        candidates.extend(clean_prescription_line(fragment) for fragment in fragments)
+        return any(
+            text and (has_medication_anchor(text) or looks_like_prescription_line(text))
+            for text in candidates
+        )
+
+    def _build_narrative_column_text(self, column_lines: list[dict]) -> str:
+        lines: list[str] = []
+        for line in column_lines:
+            text = clean_prescription_line(line.get("text", ""))
+            if not text:
+                continue
+            lines.append(text)
+        return "\n".join(lines).strip()
 
     def _column_region_bbox(self, column_lines: list[dict], width: int, height: int) -> tuple[int, int, int, int] | None:
         if not column_lines:

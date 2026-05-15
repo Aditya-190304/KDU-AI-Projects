@@ -5,13 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - optional dependency path
-    yaml = None
-
-from medical_extraction.core.constants import DEFAULT_THRESHOLDS
+from medical_extraction.core.config import load_runtime_config
 from medical_extraction.core.pipeline import ExtractionPipeline
+from medical_extraction.utils.env import load_env_file
 
 
 def parse_bool(value: str | bool) -> bool:
@@ -23,27 +19,6 @@ def parse_bool(value: str | bool) -> bool:
     if normalized in {"0", "false", "no", "n"}:
         return False
     raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
-
-
-def load_config(config_path: str | None) -> dict:
-    config = {"pipeline": {}, "thresholds": dict(DEFAULT_THRESHOLDS)}
-    default_path = Path("configs/default.yaml")
-    if default_path.exists() and yaml is not None:
-        with default_path.open("r", encoding="utf-8") as handle:
-            loaded = yaml.safe_load(handle) or {}
-            config["pipeline"].update(loaded.get("pipeline", {}))
-            config["thresholds"].update(loaded.get("thresholds", {}))
-
-    if config_path:
-        if yaml is None:
-            raise RuntimeError("PyYAML is required when using --config.")
-        with Path(config_path).open("r", encoding="utf-8") as handle:
-            loaded = yaml.safe_load(handle) or {}
-            config["pipeline"].update(loaded.get("pipeline", {}))
-            config["thresholds"].update(loaded.get("thresholds", {}))
-    return config
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Extract structured content from a medical PDF or image.")
     parser.add_argument("--input", required=True, help="Path to the input PDF/image file.")
@@ -72,8 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    load_env_file(Path(".env"))
     args = build_parser().parse_args()
-    config = load_config(args.config)
+    config = load_runtime_config(args.config)
     config["pipeline"]["device"] = args.device
     config["pipeline"]["save_debug_images"] = args.save_debug_images
     config["pipeline"]["enable_medical_ner"] = args.enable_medical_ner

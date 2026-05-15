@@ -18,6 +18,11 @@ dependencies = [
   "Pillow>=10.0.0",
   "PyYAML>=6.0.0",
   "rapidfuzz>=3.9.0",
+  "chromadb>=1.5.0,<2",
+  "boto3>=1.39.0",
+  "presidio-analyzer>=2.2.362",
+  "presidio-anonymizer>=2.2.362",
+  "spacy>=3.8.0,<4",
 ]
 
 [project.optional-dependencies]

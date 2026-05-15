@@ -1,0 +1,64 @@
+{
+  "8e9da3ea572989d50af64c660f800d9282c88a575ad044a5ea33db28c653ecf0": {
+    "file_hash": "8e9da3ea572989d50af64c660f800d9282c88a575ad044a5ea33db28c653ecf0",
+    "document_id": "10",
+    "input_file": "C:\\Users\\Dell\\Desktop\\rag project\\data\\uploads\\10.jpg",
+    "output_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\10_result.json",
+    "rag_text_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\10_result_rag.txt",
+    "chunk_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\10_result_rag_chunks.json",
+    "summary": {
+      "total_pages": 1,
+      "copyable_pages": 0,
+      "mixed_pages": 0,
+      "scanned_pages": 0,
+      "handwritten_pages": 1,
+      "total_blocks": 17,
+      "total_tables": 0,
+      "total_forms": 0,
+      "total_prescriptions": 0,
+      "needs_review_blocks": 1,
+      "processing_time_seconds": 198.26,
+      "ocr_requests": 0,
+      "ocr_estimated_cost_usd": 0.0,
+      "total_chunks": 17,
+      "indexed_chunks": 17
+    },
+    "warnings": [
+      "Standalone image routed by classifier: handwritten-like image.",
+      "Suppressed 2 footer lines from handwritten OCR.",
+      "Failed to upload extraction artifacts to S3: Error when retrieving token from sso: Token has expired and refresh failed",
+      "Failed to upload raw chunks to S3: Error when retrieving token from sso: Token has expired and refresh failed"
+    ],
+    "updated_at": "2026-05-14T18:40:10.325609+00:00"
+  },
+  "cae41c560a9a210d3a3f8efdd74466ca2b68f2436d7eca029a6c16459152e530": {
+    "file_hash": "cae41c560a9a210d3a3f8efdd74466ca2b68f2436d7eca029a6c16459152e530",
+    "document_id": "john_doe_synthetic_medical_report_table_image_different",
+    "input_file": "C:\\Users\\Dell\\Desktop\\rag project\\data\\uploads\\john_doe_synthetic_medical_report_table_image_different.pdf",
+    "output_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\john_doe_synthetic_medical_report_table_image_different_result.json",
+    "rag_text_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\john_doe_synthetic_medical_report_table_image_different_result_rag.txt",
+    "chunk_file": "C:\\Users\\Dell\\Desktop\\rag project\\output\\uploads\\john_doe_synthetic_medical_report_table_image_different_result_rag_chunks.json",
+    "summary": {
+      "total_pages": 1,
+      "copyable_pages": 0,
+      "mixed_pages": 1,
+      "scanned_pages": 0,
+      "handwritten_pages": 0,
+      "total_blocks": 23,
+      "total_tables": 3,
+      "total_forms": 0,
+      "total_prescriptions": 0,
+      "needs_review_blocks": 0,
+      "processing_time_seconds": 650.46,
+      "ocr_requests": 0,
+      "ocr_estimated_cost_usd": 0.0,
+      "total_chunks": 27,
+      "indexed_chunks": 27
+    },
+    "warnings": [
+      "Failed to upload extraction artifacts to S3: Error when retrieving token from sso: Token has expired and refresh failed",
+      "Failed to upload raw chunks to S3: Error when retrieving token from sso: Token has expired and refresh failed"
+    ],
+    "updated_at": "2026-05-14T18:44:28.699077+00:00"
+  }
+}

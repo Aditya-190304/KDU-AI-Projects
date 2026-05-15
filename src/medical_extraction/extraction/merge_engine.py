@@ -209,7 +209,7 @@ def _can_merge_paragraphs(previous: dict, current: dict) -> bool:
 
 
 def _merge_paragraph_pair(previous: dict, current: dict) -> dict:
-    merged_text = " ".join(part for part in [previous.get("text", "").strip(), current.get("text", "").strip()] if part)
+    merged_text = "\n".join(part for part in [previous.get("text", "").strip(), current.get("text", "").strip()] if part)
     previous_bbox = previous["bbox"]
     current_bbox = current["bbox"]
     confidence = round(
