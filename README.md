@@ -1627,16 +1627,3 @@ $env:PYTHONPATH="src"
 python scripts\backfill_keyword_index.py --config configs/local.yaml
 ```
 
-## 26. Final Guidance for Design-Doc Generation
-
-When converting this README into a formal design document, the most important themes to preserve are:
-
-- extraction is route-specific, not one-size-fits-all
-- chunking is medical-aware and layout-aware, not generic text splitting
-- retrieval is persistent and hybrid
-- reranking is an explicit stage, not just top-k retrieval
-- redaction is enforced before unauthorized answer generation
-- audit masking happens before persistence
-- DynamoDB Local is the local audit backend
-- dense semantic behavior depends on the BGE embedding layer
-- the frontend is tightly coupled to role-aware backend behavior, not just a thin upload form
